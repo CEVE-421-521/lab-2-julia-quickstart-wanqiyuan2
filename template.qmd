@@ -75,7 +75,7 @@ get_fname(year::Int) = "data/tidesandcurrents-8638610-$(year)-NAVD-GMT-metric.cs
 
 Now we're ready to define our function:
 
-```julia
+```{julia}
 
 function read_tides(year::Int)
     
@@ -88,10 +88,16 @@ function read_tides(year::Int)
     # <YOUR CODE GOES HERE>
     # 1. read in the CSV file and save as a dataframe
     # 2. convert the "Date Time" column to a DateTime object
+    date_format = "yyyy-mm-dd HH:MM" # <1>
+    df = CSV.read(fname, DataFrame; dateformat=date_format) # <2>
     # 3. convert the " Water Level" column to meters
+    df[!, " Water Level"] .*= 1u"m" 
     # 4. rename the columns to "datetime" and "lsl"
+    df = @rename(df, :datetime = $"Date Time", :lsl = $" Water Level"); 
     # 5. select the "datetime" and "lsl" columns
+    df = @select(df, :datetime, :lsl)
     # 6. return the dataframe
+    return df 
 end
 
 # print out the first 10 rows of the 1928 data
@@ -121,28 +127,28 @@ First, let's read in all the data.
 1. Update the code blocks below, then replace \```julia\``` with \```{julia}\```.
 :::
 
-```julia
+```{julia}
 years = 1928:2021 # all the years of data
-annual_data = # call the read_tides function on each year (see hint above!)
+annual_data = read_tides.(years)# call the read_tides function on each year (see hint above!)
 typeof(annual_data) # should be a vector of DataFrames
 ```
 
 Next, we'll use the `vcat` function to combine all the data into a single `DataFrame`.
 
-```julia
+```{julia}
 df = vcat(annual_data...)
 first(df, 5)
 ```
 
 And we can look at the last 5 rows
 
-```julia
+```{julia}
 last(df, 5)
 ```
 
 Finally, we'll make sure we drop any missing data.
 
-```julia
+```{julia}
 dropmissing!(df) # drop any missing data
 ```
 
@@ -151,4 +157,46 @@ dropmissing!(df) # drop any missing data
 1. Plot the hourly water levels for March 2020, using subsetting and plotting techniques from the instructions
 1. In the instructions, we plotted the average monthly water level from each month using `groupby`. Repeat this analysis, using the full dataset (all years). 
 1. Now repeat the analysis, but group by day of the year. What do you notice? (**Hint**: use `Dates.dayofyear` to get the day of the year from a `DateTime` object)
-
+```{julia}
+t_start = Dates.DateTime(2020, 3, 1, 0) # <1>
+t_end = Dates.DateTime(2020, 3, 31, 23)
+df_month = @subset(df, t_start .<= :datetime .<= t_end) # <2>
+first(df_month, 3)
+plot(
+    df_month.datetime,
+    df_month.lsl;
+    title="Water levels at Sewells Point, VA",
+    ylabel="Water level", # <1>
+    label=false, # <2>
+)
+```
+```{julia}
+df[!, :month] = Dates.month.(df.datetime) # <1>
+dropmissing!(df, :lsl) # <2>
+df_bymonth = groupby(df, :month) # <3>
+df_climatology = combine(df_bymonth, :lsl => mean => :lsl_avg); # <4>
+plot(
+    df_climatology.month, # <1>
+    df_climatology.lsl_avg;
+    xticks=1:12, # <2>
+    xlabel="Month",
+    ylabel="Average Water level",
+    linewidth=3, # <3>
+    label=false,
+)
+```
+```{julia}
+df[!, :dayofyear] = Dates.dayofyear.(df.datetime) 
+dropmissing!(df, :lsl) 
+df_byday = groupby(df, :dayofyear) 
+df_climatology = combine(df_byday, :lsl => mean => :lsl_avg); 
+plot(
+    df_climatology.dayofyear, 
+    df_climatology.lsl_avg;
+    xticks=1:366, 
+    xlabel="Day of Year",
+    ylabel="Average Water level",
+    linewidth=3, 
+    label=false,
+)
+```
